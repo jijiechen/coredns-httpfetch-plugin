@@ -3,18 +3,16 @@
 package httpfetch
 
 import (
-	//"fmt"
-	"testing"
-	"time"
-
+	"fmt"
 	"github.com/caddyserver/caddy"
 	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
 // TestSetup tests the various things that should be parsed by setup.
 // Make sure you also test for parse errors.
 func TestSetup(t *testing.T) {
-	c := caddy.NewTestController("dns", `httpfetch { url example.org\n token foobar\n localCacheDuration 10s }`)
+	c := caddy.NewTestController("dns", `httpfetch { url example.org\n  }`)
 	if err := setup(c); err != nil {
 		t.Fatalf("Expected no errors, but got: %v", err)
 	}
@@ -25,14 +23,44 @@ func TestSetup(t *testing.T) {
 	}
 }
 
-func TestSetupWithWrongDuration(t *testing.T) {
-	c := caddy.NewTestController("dns", `httpfetch { url example.org\n token foobar\n localCacheDuration Wrong }`)
-	_, err := newHttpFetch(c)
-	assert.Error(t, err, "Expected error")
+
+func TestSetupWithUrl(t *testing.T) {
+	c := caddy.NewTestController("dns", `httpfetch { url example.org\n }`)
+	httpFetch, _ := newHttpFetch(c)
+	assert.Equal(t, "example.org", httpFetch.ReqUrl, "Url not set properly")
+	assert.Equal(t, "GET", httpFetch.ReqMethod, "Http method did not default to GET")
+	assert.Equal(t, "dns_name=%s", httpFetch.ReqQueryTemplate, "Http method did not default to GET")
 }
 
-func TestSetupWithDuration(t *testing.T) {
-	c := caddy.NewTestController("dns", `httpfetch { url example.org\n token foobar\n localCacheDuration 10s }`)
-	nb, _ := newHttpFetch(c)
-	assert.Equal(t, nb.CacheDuration, time.Second*10, "Duration not set properly")
+func TestSetupWithQueryTemplate(t *testing.T) {
+	c := caddy.NewTestController("dns", `httpfetch { url example.org\n query domain=%s\n }`)
+	httpFetch, _ := newHttpFetch(c)
+	assert.Equal(t, "domain=%s", httpFetch.ReqQueryTemplate, "Query template not set properly")
+	assert.Equal(t, "domain=a.com", fmt.Sprintf(httpFetch.ReqQueryTemplate, "a.com"),"Query template not formatted properly")
+}
+
+
+// see caddyfile syntax at https://caddyserver.com/docs/caddyfile/concepts
+// it's strange that we can't use backtick ` here
+func TestSetupWithParameterEscaping(t *testing.T) {
+	c := caddy.NewTestController("dns", `httpfetch {    httpfetch {
+      url https://httpfetch.example.org/
+      method POST
+      query dns_name=%s
+      body "{ \"dns_name\": \"%s\" }"
+      header "Authorization: Bearer XXX"
+      header "Content-Type: application/json"
+      
+      analyze_ip ".responseText | json | access \".obj[0].ip\""
+      analyze_ttl ".responseText | json | access \".obj[0].ttl\""
+   }`)
+
+	httpFetch, _ := newHttpFetch(c)
+	assert.Equal(t, "https://httpfetch.example.org/", httpFetch.ReqUrl, "Url not set properly")
+	assert.Equal(t, "POST", httpFetch.ReqMethod, "Http method did not default to GET")
+
+	assert.Equal(t, `{ "dns_name": "%s" }`, httpFetch.ReqBodyTemplate, "Body template was not processed correctly")
+	assert.Equal(t, 2, len(httpFetch.ReqHeaders), "Request header not processed correctly")
+	assert.Equal(t, `Authorization: Bearer XXX`, httpFetch.ReqHeaders[0], "Request header not processed correctly")
+	assert.Equal(t, `.responseText | json | access ".obj[0].ip"`, httpFetch.ResIPExtractor, "Request header not processed correctly")
 }

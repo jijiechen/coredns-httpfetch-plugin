@@ -2,14 +2,12 @@
 package httpfetch
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/imkira/go-ttlmap"
@@ -18,7 +16,7 @@ import (
 
 var localCache = ttlmap.New(nil)
 
-func query(fetchArgs *Httpfetch, dnsName string) (string, error) {
+func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 	item, err := localCache.Get(dnsName)
 	if err == nil {
 		log.Debug(fmt.Sprintf("Found in local cache %s", dnsName))
@@ -30,22 +28,24 @@ func query(fetchArgs *Httpfetch, dnsName string) (string, error) {
 		req, err := http.NewRequest(fetchArgs.ReqMethod,
 			buildUrl(fetchArgs.ReqUrl, fetchArgs.ReqQueryTemplate, dnsName),
 			buildBody(fetchArgs.ReqBodyTemplate, dnsName))
-		appendHeaders(req.Header, fetchArgs.ReqHeaders)
-		log.Debug("About to send HTTP request: %v", req)
+		appendHeaders(&req.Header, fetchArgs.ReqHeaders)
+		log.Debugf("About to send HTTP request: %v", req)
 
 		for i := 1; i <= 10; i++ {
-			log.Debug("Sending requesting: trying %d times", i)
+			log.Debugf("Sending requesting: trying %d times", i)
 			resp, err = client.Do(req)
 
 			if err != nil {
-				log.Warning("HTTP Error %v", err)
-			}
-
-			if isSuccessful(resp.StatusCode) {
+				log.Warningf("HTTP Error %v", err)
+			}else if isSuccessful(resp.StatusCode) {
 				break
 			}
 
 			time.Sleep(1 * time.Second)
+		}
+
+		if err != nil{
+			return "", err
 		}
 
 		body, err := ioutil.ReadAll(resp.Body)
@@ -59,28 +59,32 @@ func query(fetchArgs *Httpfetch, dnsName string) (string, error) {
 		}
 
 		resBody := string(body)
-		log.Debug("Response from server: %v", resBody)
+		log.Debugf("Response from server: %v", resBody)
 
-		ipAddress, err := readString(fetchArgs.ResIPExtractor, resBody)
-		if err != nil {
-			log.Warning("Could not read IP address from response: %v", err)
-			return "", err
+		ipAddress := resBody
+		if len(fetchArgs.ResIPExtractor) > 0 {
+			ipAddress, err = readString(fetchArgs.ResIPExtractor, resBody)
+			if err != nil {
+				log.Warningf("Could not read IP address from response: %v", err)
+				return "", err
+			}
 		}
 		if len(ipAddress) <= 0 {
 			log.Info("Record not found in", resBody)
 			return "", nil
 		}
 
-		ttl, err := readString(fetchArgs.ResTTLExtractor, resBody)
-		if err != nil {
-			log.Warning("Could not read TTL from response: %v", err)
-			return "", err
-		}
-		ttlSeconds, err := strconv.Atoi(ttl)
-		if err != nil {
-			ttlSeconds = 60
-			log.Warning("Could not read TTL %s as number, falling back to 60", ttl)
-			return "", err
+		ttlSeconds := 60
+		if len(fetchArgs.ResTTLExtractor) > 0 {
+			ttl, err := readString(fetchArgs.ResTTLExtractor, resBody)
+			if err != nil {
+				log.Warningf("Could not read TTL from response, falling back to 60: %v", err)
+			} else {
+				ttlSeconds, err = strconv.Atoi(ttl)
+				if err != nil {
+					log.Warningf("Could not read TTL %s as number, falling back to 60", ttl)
+				}
+			}
 		}
 
 		localCache.Set(dnsName, ttlmap.NewItem(ipAddress, ttlmap.WithTTL(time.Duration(ttlSeconds)*time.Second)), nil)
@@ -93,8 +97,8 @@ func isSuccessful(statusCode int) bool {
 }
 
 
-func buildUrl(baseUrl string, queryStringTemplate string, dnsName string) string{
-	if len(queryStringTemplate) <= 0{
+func buildUrl(baseUrl string, queryTemplate string, dnsName string) string{
+	if len(queryTemplate) <= 0{
 		return baseUrl
 	}
 
@@ -106,7 +110,7 @@ func buildUrl(baseUrl string, queryStringTemplate string, dnsName string) string
 		urlBuilder.WriteString("&")
 	}
 
-	queryString := fmt.Sprintf(queryStringTemplate, dnsName)
+	queryString := fmt.Sprintf(queryTemplate, dnsName)
 	urlBuilder.WriteString(queryString)
 	return urlBuilder.String()
 }
@@ -119,25 +123,7 @@ func buildBody(bodyTemplate string, dnsName string) io.Reader {
 	return strings.NewReader(fmt.Sprint(bodyTemplate, dnsName))
 }
 
-func substr(s string, start, end int) string {
-	if end < 0{
-		end = len(s) - start
-	}
-
-	counter, startIdx := 0, 0
-	for i := range s {
-		if counter == start {
-			startIdx = i
-		}
-		if counter == end {
-			return s[startIdx:i]
-		}
-		counter++
-	}
-	return s[startIdx:]
-}
-
-func appendHeaders(header http.Header, reqHeaderArgs []string) {
+func appendHeaders(header *http.Header, reqHeaderArgs []string) {
 	if len(reqHeaderArgs) <= 0{
 		return
 	}
@@ -148,31 +134,24 @@ func appendHeaders(header http.Header, reqHeaderArgs []string) {
 			continue
 		}
 
-		headerName := strings.Trim(substr(h, 0, indexOfColon), " ")
-		headerValue := strings.Trim(substr(h, indexOfColon + 1, -1 /*end of string*/), " ")
+		headerName := strings.Trim(h[0:indexOfColon], " ")
+		headerValue := strings.Trim(h[indexOfColon+1:], " ")
 		header.Set(headerName, headerValue)
 	}
 }
 
-func readJson(jsonStr string, fieldSelector string) string{
-
-}
-
 func readString(tmplStr string, text string) (string, error) {
-	if len(tmplStr) <= 0 {
-		return text, nil
-	}
-
-	tmpl, err := template.New("extractor").Parse(tmplStr)
-	if err != nil {
-		return text, err
-	}
-
-	var resultBytes bytes.Buffer
-
-	err = tmpl.Execute(&resultBytes, /* responseText, json, xml,  */)
-	if err != nil {
-		return text, err
-	}
-	return resultBytes.String(), nil
+	return text, nil
+	//tmpl, err := template.New("extractor").Parse(tmplStr)
+	//if err != nil {
+	//	return text, err
+	//}
+	//
+	//var resultBytes bytes.Buffer
+	//
+	//err = tmpl.Execute(&resultBytes)
+	//if err != nil {
+	//	return text, err
+	//}
+	//return resultBytes.String(), nil
 }

@@ -19,12 +19,7 @@ import (
 // friends to log.
 var log = clog.NewWithPlugin("httpfetch")
 
-// method: GET/POST/PUT/...
-// URL: ends with /
-// queryTemplate: does not contains /
-// header: may have multiple headers...
-
-type Httpfetch struct {
+type HttpFetch struct {
 	ReqMethod        string
 	ReqUrl           string
 	ReqHeaders       []string
@@ -37,15 +32,15 @@ type Httpfetch struct {
 	Next          plugin.Handler
 }
 
-func (httpFetch Httpfetch) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (httpFetch HttpFetch) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 
 	answers := []dns.RR{}
 	state := request.Request{W: w, Req: r}
 
-	ipAddress, err := query(&httpFetch, strings.TrimRight(state.QName(), "."))
+	ipAddress, err := query(httpFetch, strings.TrimRight(state.QName(), "."))
 
 	if err != nil {
-		log.Warning("Error fetching dns from upstream: %v", err)
+		log.Warningf("Error fetching dns from upstream: %v", err)
 		return plugin.NextOrFailure(httpFetch.Name(), httpFetch.Next, ctx, w, r)
 	}
 	if len(ipAddress) == 0 {
@@ -69,7 +64,7 @@ func (httpFetch Httpfetch) ServeDNS(ctx context.Context, w dns.ResponseWriter, r
 }
 
 // Name implements the Handler interface.
-func (httpFetch Httpfetch) Name() string { return "httpfetch" }
+func (httpFetch HttpFetch) Name() string { return "httpfetch" }
 
 // Make out a reference to os.Stdout so we can easily overwrite it for testing.
 var out io.Writer = os.Stdout

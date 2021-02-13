@@ -1,56 +1,7 @@
 # coredns-httpfetch-plugin
 
-This plugin gets an A record from HttpFetch[1]. It uses the REST API of netxbox
-to ask for a an IP address of a hostname:
+This plugin gets an A record from an HTTP upstream server.
 
-https://httpfetch.example.org/api/ipam/ip-addresses/?dns_name=example-vm-host
-
-
-```
-{
-    "count": 1,
-    "next": null,
-    "previous": null,
-    "results": [
-        {
-            "id": 426,
-            "family": {
-                "value": 4,
-                "label": "IPv4"
-            },
-            "address": "192.168.1.101/25",
-            "vrf": null,
-            "tenant": null,
-            "status": {
-                "value": 1,
-                "label": "Active"
-            },
-            "role": null,
-            "interface": {
-                "id": 452,
-                "url": "https://httpfetch.example.org/api/virtualization/interfaces/452/",
-                "device": null,
-                "virtual_machine": {
-                    "id": 10,
-                    "url": "https://httpfetch.example.org/api/virtualization/virtual-machines/10/",
-                    "name": "VM22"
-                },
-                "name": "ens12"
-            },
-            "nat_inside": null,
-            "nat_outside": null,
-            "dns_name": "vm22-jump-host",
-            "description": "",
-            "tags": [],
-            "custom_fields": {
-                "dhcp_route": null
-            },
-            "created": "2020-03-04",
-            "last_updated": "2020-03-04T16:57:07.375937Z"
-        }
-    ]
-}
-```
 
 ## Usage
 
@@ -58,43 +9,36 @@ To activate the plugin you need to compile CoreDNS with the plugin added
 to `plugin.cfg`
 
 ```
-httpfetch:github.com/oz123/coredns-httpfetch-plugin
+https://github.com/jijiechen/coredns-httpfetch-plugin
 ```
 
 Then add it to Corefile:
 
 ```
-. {
+{
    httpfetch {
-      token <YOU-API-TOKEN>
-      url <https://httpfetch.example.org>
-      localCacheDuration <The duration to keep each entry locally before querying httpfetch again. Use go `time.Duration` notation>
+      url https://httpfetch.example.org/
+      method POST
+      query dns_name=%s
+      body '{"dns_name":"%s"}'
+      header Authorization: Bearer XXX
+      header Content-Type: application/json
+      
+      analyze_ip '.responseText | json | access ".obj[0].ip"'
+      analyze_ttl '.responseText | json | access ".obj[0].ttl"'
    }
 }
 ```
 
-The config parameters are mandatory.
+Only the `url` config parameter is mandatory.
+
 ## Developing locally
 
-You can test the plugin functionallity with CoreDNS by adding the following to
+You can test the plugin functionality with CoreDNS by adding the following to
 `go.mod` in the source code directory of coredns.
 
 ```
-replace github.com/oz123/coredns-httpfetch-plugin => <path-to-you-local-copy>/coredns-httpfetch-plugin
+replace github.com/jijiechen/coredns-httpfetch-plugin => <path-to-you-local-copy>/coredns-httpfetch-plugin
 ```
 
-Testing against a remote instance of httpfetch is possible with SSH port forwarding:
 
-```
-Host YourHost
-   Hostname 10.0.0.91
-   ProxyJump YourJumpHost
-   LocalForward 18443 192.168.1.128:8443
-```
-
-## Credits
-
-This plugin is heavily based on the code of the redis-plugin for CoreDNS.
-
-
-[1]: https://httpfetch.readthedocs.io/en/stable/

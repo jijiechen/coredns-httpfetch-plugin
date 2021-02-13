@@ -13,26 +13,24 @@ func TestQuery(t *testing.T) {
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_host"}).Reply(
-		200).BodyString(
-		`{"count":1, "results":[{"address": "10.0.0.2/25", "dns_name": "my_host"}]}`)
+		200).BodyString(`10.0.0.2`)
 
 	want := "10.0.0.2"
-	got := query("https://example.org/api/ipam/ip-addresses", "mytoken", "my_host", time.Millisecond*100)
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	got, _ := query(fetcher,  "my_host")
 	if got != want {
 		t.Fatalf("Expected %s but got %s", want, got)
 	}
-
 }
 
 func TestNoSuchHost(t *testing.T) {
-
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
-		map[string]string{"dns_name": "NoSuchHost"}).Reply(
-		200).BodyString(`{"count":0,"next":null,"previous":null,"results":[]}`)
+		map[string]string{"dns_name": "NoSuchHost"}).Reply(200).BodyString(``)
 
 	want := ""
-	got := query("https://example.org/api/ipam/ip-addresses", "mytoken", "NoSuchHost", time.Millisecond*100)
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	got, _ := query(fetcher, "NoSuchHost")
 	if got != want {
 		t.Fatalf("Expected empty string but got %s", got)
 	}
@@ -43,33 +41,54 @@ func TestLocalCache(t *testing.T) {
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_host"}).Reply(
-		200).BodyString(
-		`{"count":1, "results":[{"address": "10.0.0.2/25", "dns_name": "my_host"}]}`)
+		200).BodyString(`10.0.0.2`)
 
-	ip_address := ""
-
-	got := query("https://example.org/api/ipam/ip-addresses", "mytoken", "my_host", time.Millisecond*100)
+	ipAddress := ""
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	got, err := query(fetcher,  "my_host")
 
 	item, err := localCache.Get("my_host")
 	if err == nil {
-		ip_address = item.Value().(string)
+		ipAddress = item.Value().(string)
 	}
 
-	assert.Equal(t, got, ip_address, "local cache item didn't match")
-
+	assert.Equal(t, ipAddress, got, "local cache item didn't match")
 }
 
 func TestLocalCacheExpiration(t *testing.T) {
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_host"}).Reply(
-		200).BodyString(
-		`{"count":1, "results":[{"address": "10.0.0.2/25", "dns_name": "my_host"}]}`)
+		200).BodyString(`10.0.0.2`)
 
-	query("https://example.org/api/ipam/ip-addresses", "mytoken", "my_host", time.Millisecond*100)
-	<-time.After(101 * time.Millisecond)
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	query(fetcher, "my_host")
+	<-time.After(61 * time.Millisecond)
 	item, err := localCache.Get("my_host")
 	if err != nil {
 		t.Fatalf("Expected errors, but got: %v", item)
 	}
 }
+
+func TestQueryWithHeader(t *testing.T) {
+	defer gock.Off() //
+	gock.New("https://example.org/api/ipam/ip-addresses/").MatchHeader("X-Token", "xyz").Reply(
+		200).BodyString(`10.0.0.2`)
+
+	want := "10.0.0.2"
+	fetcher := HttpFetch{
+		ReqUrl: "https://example.org/api/ipam/ip-addresses/",
+		ReqHeaders: []string{"X-Token: xyz"}}
+	got, _ := query(fetcher,  "my_host")
+	if got != want {
+		t.Fatalf("Expected %s but got %s", want, got)
+	}
+}
+
+
+// test body
+
+// test text template for analyzing IP
+
+// test text template for analyzing TTL
+
