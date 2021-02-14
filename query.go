@@ -66,9 +66,13 @@ func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 		resBody := string(body)
 		log.Debugf("Response from server: %v", resBody)
 
+		tmplVars := make(map[string]interface{})
+		tmplVars["Body"] = resBody
+		tmplVars["Header"] = resp.Header
+
 		ipAddress := resBody
 		if len(fetchArgs.ResIPExtractor) > 0 {
-			ipAddress, err = readString("ip-extractor", fetchArgs.ResIPExtractor, "ResponseText", resBody)
+			ipAddress, err = tpl("ip-extractor", fetchArgs.ResIPExtractor, tmplVars)
 			if err != nil {
 				log.Warningf("Could not read IP address from response: %v", err)
 				return "", err
@@ -81,7 +85,7 @@ func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 
 		ttlSeconds := 60
 		if len(fetchArgs.ResTTLExtractor) > 0 {
-			ttl, err := readString("ttl-extractor", fetchArgs.ResTTLExtractor, "ResponseText", resBody)
+			ttl, err := tpl("ttl-extractor", fetchArgs.ResTTLExtractor, tmplVars)
 			if err != nil {
 				log.Warningf("Could not read TTL from response, falling back to 60: %v", err)
 			} else {
@@ -107,7 +111,10 @@ func buildUrl(baseUrl string, queryTemplate string, dnsName string) string{
 		return baseUrl
 	}
 
-	queryString, err := readString("request-query-composer", queryTemplate, "DnsName", dnsName)
+	vars := make(map[string]interface{})
+	vars["DnsName"] = dnsName
+
+	queryString, err := tpl("request-query-composer", queryTemplate, vars)
 	if err != nil {
 		log.Warningf("Error creating request query: %v", err)
 		return baseUrl
@@ -129,7 +136,10 @@ func buildBody(bodyTemplate string, dnsName string) io.Reader {
 		return nil
 	}
 
-	bodyText, err := readString("request-body-composer", bodyTemplate, "DnsName", dnsName)
+	vars := make(map[string]interface{})
+	vars["DnsName"] = dnsName
+
+	bodyText, err := tpl("request-body-composer", bodyTemplate, vars)
 	if err != nil {
 		log.Warningf("Error creating request body: %v", err)
 		return nil
@@ -154,9 +164,9 @@ func appendHeaders(header *http.Header, reqHeaderArgs []string) {
 	}
 }
 
-func readString(templateName string, tmplStr string, textVarName string, text string) (string, error) {
+func tpl(templateName string, tmplStr string, vars map[string]interface{}) (string, error) {
 	if len(tmplStr) <= 0 {
-		return text, nil
+		return "", nil
 	}
 
 	compiledTemplate := templateCache[templateName]
@@ -168,9 +178,6 @@ func readString(templateName string, tmplStr string, textVarName string, text st
 		}
 		templateCache[templateName] = compiledTemplate
 	}
-
-	vars := make(map[string]interface{})
-	vars[textVarName] = text
 
 	var resultBytes bytes.Buffer
 	err := compiledTemplate.Execute(&resultBytes, vars)

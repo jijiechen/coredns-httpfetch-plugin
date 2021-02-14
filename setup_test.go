@@ -51,8 +51,8 @@ func TestSetupWithParameterEscaping(t *testing.T) {
       header "Authorization: Bearer XXX"
       header "Content-Type: application/json"
       
-      analyze_ip "{{ (.ResponseText | fromJson).ip_address  }}"
-      analyze_ttl "{{ (.ResponseText | fromJson).ttl  }}"
+      analyze_ip "{{ (.Body | fromJson).ip_address  }}"
+      analyze_ttl "{{ (.Body | fromJson).ttl  }}"
    }`)
 
 	httpFetch, _ := newHttpFetch(c)
@@ -63,5 +63,5 @@ assert.Equal(t, `dns_name={{ .DnsName }}`, httpFetch.ReqQueryTemplate, "Query te
 	assert.Equal(t, `{{ (dict "dns_name" .DnsName) | toJson }}`, httpFetch.ReqBodyTemplate, "Body template was not processed correctly")
 	assert.Equal(t, 2, len(httpFetch.ReqHeaders), "Request header not processed correctly")
 	assert.Equal(t, `Authorization: Bearer XXX`, httpFetch.ReqHeaders[0], "Request header not processed correctly")
-	assert.Equal(t, `{{ (.ResponseText | fromJson).ip_address  }}`, httpFetch.ResIPExtractor, "Request header not processed correctly")
+	assert.Equal(t, `{{ (.Body | fromJson).ip_address  }}`, httpFetch.ResIPExtractor, "Request header not processed correctly")
 }

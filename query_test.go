@@ -119,7 +119,7 @@ func TestQueryWithIPExtractor(t *testing.T) {
 		200).BodyString(`10.0.0.2/32`)
 
 	want := "10.0.0.2"
-	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ResIPExtractor: "{{ (.ResponseText | split `/`)._0 }}"  }
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ResIPExtractor: "{{ (.Body | split `/`)._0 }}"  }
 	got, _ := query(fetcher,  "my_host_with_ip_extractor")
 	if got != want {
 		t.Fatalf("Expected %s but got %s", want, got)
@@ -137,8 +137,8 @@ func TestQueryWithTTLExtractor(t *testing.T) {
 	expectedTTL := 3600
 	fetcher := HttpFetch{
 		ReqUrl: "https://example.org/ip-addresses-with-ttl/",
-		ResIPExtractor: "{{ (.ResponseText | fromJson).ip_address  }}",
-		ResTTLExtractor: "{{ (.ResponseText | fromJson).ttl }}",
+		ResIPExtractor: "{{ (.Body | fromJson).ip_address  }}",
+		ResTTLExtractor: "{{ (.Body | fromJson).ttl }}",
 	}
 
 	got, _ := query(fetcher,  "the_cool_host")
