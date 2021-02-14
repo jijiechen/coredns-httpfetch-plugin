@@ -20,12 +20,12 @@ Then add it to Corefile:
       url https://httpfetch.example.org/
       method POST
       query dns_name=%s
-      body '{"dns_name":"%s"}'
+      body "{"dns_name":"%s"}"
       header Authorization: Bearer XXX
       header Content-Type: application/json
       
-      analyze_ip '.responseText | json | access ".obj[0].ip"'
-      analyze_ttl '.responseText | json | access ".obj[0].ttl"'
+      analyze_ip "{{ (.ResponseText | fromJson).ip_address  }}"
+      analyze_ttl "{{ (.ResponseText | fromJson).ttl  }}"
    }
 }
 ```

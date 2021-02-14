@@ -2,15 +2,18 @@
 package httpfetch
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/imkira/go-ttlmap"
+	"github.com/Masterminds/sprig/v3"
 )
 
 
@@ -140,18 +143,26 @@ func appendHeaders(header *http.Header, reqHeaderArgs []string) {
 	}
 }
 
+
+// todo: cache parsed template function...
 func readString(tmplStr string, text string) (string, error) {
-	return text, nil
-	//tmpl, err := template.New("extractor").Parse(tmplStr)
-	//if err != nil {
-	//	return text, err
-	//}
-	//
-	//var resultBytes bytes.Buffer
-	//
-	//err = tmpl.Execute(&resultBytes)
-	//if err != nil {
-	//	return text, err
-	//}
-	//return resultBytes.String(), nil
+	if len(tmplStr) <= 0 {
+		return text, nil
+	}
+
+	// todo: to support XML parsing
+	tmpl, err := template.New("extractor").Funcs(sprig.TxtFuncMap()).Parse(tmplStr)
+	if err != nil {
+		return "", err
+	}
+
+	vars := make(map[string]interface{})
+	vars["ResponseText"] = text
+
+	var resultBytes bytes.Buffer
+	err = tmpl.Execute(&resultBytes, vars)
+	if err != nil {
+		return "", err
+	}
+	return resultBytes.String(), nil
 }
