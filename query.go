@@ -3,6 +3,7 @@ package httpfetch
 
 import (
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,12 +13,13 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/imkira/go-ttlmap"
 	"github.com/Masterminds/sprig/v3"
+	"github.com/imkira/go-ttlmap"
 )
 
 
 var localCache = ttlmap.New(nil)
+var templateCache = make(map[string]*template.Template)
 
 func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 	item, err := localCache.Get(dnsName)
@@ -66,7 +68,7 @@ func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 
 		ipAddress := resBody
 		if len(fetchArgs.ResIPExtractor) > 0 {
-			ipAddress, err = readString(fetchArgs.ResIPExtractor, resBody)
+			ipAddress, err = readString("ip-extractor", fetchArgs.ResIPExtractor, resBody)
 			if err != nil {
 				log.Warningf("Could not read IP address from response: %v", err)
 				return "", err
@@ -79,7 +81,7 @@ func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 
 		ttlSeconds := 60
 		if len(fetchArgs.ResTTLExtractor) > 0 {
-			ttl, err := readString(fetchArgs.ResTTLExtractor, resBody)
+			ttl, err := readString("ttl-extractor", fetchArgs.ResTTLExtractor, resBody)
 			if err != nil {
 				log.Warningf("Could not read TTL from response, falling back to 60: %v", err)
 			} else {
@@ -143,26 +145,64 @@ func appendHeaders(header *http.Header, reqHeaderArgs []string) {
 	}
 }
 
-
-// todo: cache parsed template function...
-func readString(tmplStr string, text string) (string, error) {
+func readString(templateName string, tmplStr string, text string) (string, error) {
 	if len(tmplStr) <= 0 {
 		return text, nil
 	}
 
-	// todo: to support XML parsing
-	tmpl, err := template.New("extractor").Funcs(sprig.TxtFuncMap()).Parse(tmplStr)
-	if err != nil {
-		return "", err
+	compiledTemplate := templateCache[templateName]
+	if compiledTemplate == nil {
+		var err error
+		compiledTemplate, err = template.New("extractor").Funcs(createFuncMap()).Parse(tmplStr)
+		if err != nil {
+			return "", err
+		}
+		templateCache[templateName] = compiledTemplate
 	}
 
 	vars := make(map[string]interface{})
 	vars["ResponseText"] = text
 
 	var resultBytes bytes.Buffer
-	err = tmpl.Execute(&resultBytes, vars)
+	err := compiledTemplate.Execute(&resultBytes, vars)
 	if err != nil {
 		return "", err
 	}
 	return resultBytes.String(), nil
+}
+
+func createFuncMap() template.FuncMap {
+	txtFuncMap := sprig.TxtFuncMap()
+	delete(txtFuncMap, "env")
+	delete(txtFuncMap, "expandenv")
+	delete(txtFuncMap, "getHostByName")
+
+	extra := template.FuncMap{
+		"toXml":        toXml,
+		"fromXml":      fromXml,
+	}
+
+	for k, v := range extra {
+		txtFuncMap[k] = v
+	}
+
+	return txtFuncMap
+}
+
+// todo: supports XML using https://github.com/beevik/etree
+func fromXml(xmlStr string) interface{} {
+	var output interface{}
+	err := xml.Unmarshal([]byte(xmlStr), &output)
+	if err != nil {
+		return nil
+	}
+	return output
+}
+
+func toXml(v interface{}) string {
+	data, err := xml.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }

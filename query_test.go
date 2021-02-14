@@ -6,10 +6,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/h2non/gock.v1"
 	"testing"
+	"text/template"
 	"time"
 )
 
 func TestQuery(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_host"}).Reply(
@@ -24,6 +26,7 @@ func TestQuery(t *testing.T) {
 }
 
 func TestNoSuchHost(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "NoSuchHost"}).Reply(200).BodyString(``)
@@ -38,6 +41,7 @@ func TestNoSuchHost(t *testing.T) {
 }
 
 func TestLocalCache(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_host"}).Reply(
@@ -56,6 +60,7 @@ func TestLocalCache(t *testing.T) {
 }
 
 func TestLocalCacheExpiration(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_expired_host"}).Reply(
@@ -71,6 +76,7 @@ func TestLocalCacheExpiration(t *testing.T) {
 }
 
 func TestQueryWithHeader(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() //
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchHeader("X-Token", "xyz").Reply(
 		200).BodyString(`10.0.0.2`)
@@ -87,6 +93,7 @@ func TestQueryWithHeader(t *testing.T) {
 
 
 func TestQueryWithIPExtractor(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() //
 	gock.New("https://example.org/api/ipam/ip-addresses/").Reply(
 		200).BodyString(`10.0.0.2/32`)
@@ -101,6 +108,7 @@ func TestQueryWithIPExtractor(t *testing.T) {
 
 
 func TestQueryWithTTLExtractor(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off()
 	gock.New("https://example.org/ip-addresses-with-ttl/").Reply(
 		200).BodyString(`{"ip_address": "10.0.0.5", "ttl": 3600}`)
@@ -128,3 +136,6 @@ func TestQueryWithTTLExtractor(t *testing.T) {
 	}
 }
 
+func resetTemplateCache(){
+	templateCache = make(map[string]*template.Template)
+}
