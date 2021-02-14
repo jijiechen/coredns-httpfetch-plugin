@@ -12,11 +12,12 @@ import (
 )
 
 func TestHttpfetch(t *testing.T) {
+	resetTemplateCache()
 	defer gock.Off() // Flush pending mocks after test execution
 	gock.New("https://example.org/api/ipam/ip-addresses/").MatchParams(
 		map[string]string{"dns_name": "my_host"}).Reply(200).BodyString(`10.0.0.2`)
 
-	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name={{ .DnsName }}"}
 
 	if fetcher.Name() != "httpfetch" {
 		t.Errorf("expected plugin name: %s, got %s", "httpfetch", fetcher.Name())

@@ -46,8 +46,8 @@ func TestSetupWithParameterEscaping(t *testing.T) {
 	c := caddy.NewTestController("dns", `httpfetch {    httpfetch {
       url https://httpfetch.example.org/
       method POST
-      query dns_name=%s
-      body "{ \"dns_name\": \"%s\" }"
+      query "dns_name={{ .DnsName }}"
+      body "{{ (dict \"dns_name\" .DnsName) | toJson }}"
       header "Authorization: Bearer XXX"
       header "Content-Type: application/json"
       
@@ -59,7 +59,8 @@ func TestSetupWithParameterEscaping(t *testing.T) {
 	assert.Equal(t, "https://httpfetch.example.org/", httpFetch.ReqUrl, "Url not set properly")
 	assert.Equal(t, "POST", httpFetch.ReqMethod, "Http method did not default to GET")
 
-	assert.Equal(t, `{ "dns_name": "%s" }`, httpFetch.ReqBodyTemplate, "Body template was not processed correctly")
+assert.Equal(t, `dns_name={{ .DnsName }}`, httpFetch.ReqQueryTemplate, "Query template was not processed correctly")
+	assert.Equal(t, `{{ (dict "dns_name" .DnsName) | toJson }}`, httpFetch.ReqBodyTemplate, "Body template was not processed correctly")
 	assert.Equal(t, 2, len(httpFetch.ReqHeaders), "Request header not processed correctly")
 	assert.Equal(t, `Authorization: Bearer XXX`, httpFetch.ReqHeaders[0], "Request header not processed correctly")
 	assert.Equal(t, `{{ (.ResponseText | fromJson).ip_address  }}`, httpFetch.ResIPExtractor, "Request header not processed correctly")

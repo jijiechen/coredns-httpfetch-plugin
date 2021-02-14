@@ -68,7 +68,7 @@ func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 
 		ipAddress := resBody
 		if len(fetchArgs.ResIPExtractor) > 0 {
-			ipAddress, err = readString("ip-extractor", fetchArgs.ResIPExtractor, resBody)
+			ipAddress, err = readString("ip-extractor", fetchArgs.ResIPExtractor, "ResponseText", resBody)
 			if err != nil {
 				log.Warningf("Could not read IP address from response: %v", err)
 				return "", err
@@ -81,7 +81,7 @@ func query(fetchArgs HttpFetch, dnsName string) (string, error) {
 
 		ttlSeconds := 60
 		if len(fetchArgs.ResTTLExtractor) > 0 {
-			ttl, err := readString("ttl-extractor", fetchArgs.ResTTLExtractor, resBody)
+			ttl, err := readString("ttl-extractor", fetchArgs.ResTTLExtractor, "ResponseText", resBody)
 			if err != nil {
 				log.Warningf("Could not read TTL from response, falling back to 60: %v", err)
 			} else {
@@ -107,6 +107,12 @@ func buildUrl(baseUrl string, queryTemplate string, dnsName string) string{
 		return baseUrl
 	}
 
+	queryString, err := readString("request-query-composer", queryTemplate, "DnsName", dnsName)
+	if err != nil {
+		log.Warningf("Error creating request query: %v", err)
+		return baseUrl
+	}
+
 	var urlBuilder strings.Builder
 	urlBuilder.WriteString(baseUrl)
 	if strings.LastIndex(baseUrl, "?") < 0 {
@@ -114,8 +120,6 @@ func buildUrl(baseUrl string, queryTemplate string, dnsName string) string{
 	}else{
 		urlBuilder.WriteString("&")
 	}
-
-	queryString := fmt.Sprintf(queryTemplate, dnsName)
 	urlBuilder.WriteString(queryString)
 	return urlBuilder.String()
 }
@@ -125,7 +129,12 @@ func buildBody(bodyTemplate string, dnsName string) io.Reader {
 		return nil
 	}
 
-	return strings.NewReader(fmt.Sprint(bodyTemplate, dnsName))
+	bodyText, err := readString("request-body-composer", bodyTemplate, "DnsName", dnsName)
+	if err != nil {
+		log.Warningf("Error creating request body: %v", err)
+		return nil
+	}
+	return strings.NewReader(bodyText)
 }
 
 func appendHeaders(header *http.Header, reqHeaderArgs []string) {
@@ -145,7 +154,7 @@ func appendHeaders(header *http.Header, reqHeaderArgs []string) {
 	}
 }
 
-func readString(templateName string, tmplStr string, text string) (string, error) {
+func readString(templateName string, tmplStr string, textVarName string, text string) (string, error) {
 	if len(tmplStr) <= 0 {
 		return text, nil
 	}
@@ -161,7 +170,7 @@ func readString(templateName string, tmplStr string, text string) (string, error
 	}
 
 	vars := make(map[string]interface{})
-	vars["ResponseText"] = text
+	vars[textVarName] = text
 
 	var resultBytes bytes.Buffer
 	err := compiledTemplate.Execute(&resultBytes, vars)

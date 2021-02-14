@@ -18,7 +18,7 @@ func TestQuery(t *testing.T) {
 		200).BodyString(`10.0.0.2`)
 
 	want := "10.0.0.2"
-	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name={{ .DnsName }}"}
 	got, _ := query(fetcher,  "my_host")
 	if got != want {
 		t.Fatalf("Expected %s but got %s", want, got)
@@ -32,7 +32,7 @@ func TestNoSuchHost(t *testing.T) {
 		map[string]string{"dns_name": "NoSuchHost"}).Reply(200).BodyString(``)
 
 	want := ""
-	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name={{ .DnsName }}"}
 	got, _ := query(fetcher, "NoSuchHost")
 	if got != want {
 		t.Fatalf("Expected empty string but got %s", got)
@@ -48,7 +48,7 @@ func TestLocalCache(t *testing.T) {
 		200).BodyString(`10.0.0.2`)
 
 	ipAddress := ""
-	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name={{ .DnsName }}"}
 	got, err := query(fetcher,  "my_host_with_ttl")
 
 	item, err := localCache.Get("my_host_with_ttl")
@@ -66,7 +66,7 @@ func TestLocalCacheExpiration(t *testing.T) {
 		map[string]string{"dns_name": "my_expired_host"}).Reply(
 		200).BodyString(`10.0.0.25`)
 
-	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name=%s"}
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqQueryTemplate: "dns_name={{ .DnsName }}"}
 	query(fetcher, "my_expired_host")
 	<-time.After(61 * time.Millisecond)
 	item, err := localCache.Get("my_expired_host")
