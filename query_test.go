@@ -5,6 +5,8 @@ package httpfetch
 import (
 	"github.com/stretchr/testify/assert"
 	"gopkg.in/h2non/gock.v1"
+	"io/ioutil"
+	"net/http"
 	"testing"
 	"text/template"
 	"time"
@@ -89,6 +91,24 @@ func TestQueryWithHeader(t *testing.T) {
 	if got != want {
 		t.Fatalf("Expected %s but got %s", want, got)
 	}
+}
+
+func TestQueryWithBody(t *testing.T) {
+	resetTemplateCache()
+	defer gock.Off()
+
+	var requestedBodyString string
+	gock.New("https://example.org/api/ipam/ip-addresses/").AddMatcher(func(httpReq *http.Request, req *gock.Request) (bool, error) {
+		body, _ := ioutil.ReadAll(httpReq.Body)
+		requestedBodyString = string(body)
+		return len(requestedBodyString) > 0, nil
+	}).Reply(200).BodyString(`10.0.0.2`)
+
+	fetcher := HttpFetch{ReqUrl: "https://example.org/api/ipam/ip-addresses/", ReqBodyTemplate: "{{ (dict \"dns_name\" .DnsName) | toJson }}"}
+
+	got, _ := query(fetcher,  "my_host_with_body")
+	assert.Equal(t, "10.0.0.2", got, "The IP did not match expected")
+	assert.Equal(t, "{\"dns_name\":\"my_host_with_body\"}",requestedBodyString, "The request body template did not work as expected")
 }
 
 
