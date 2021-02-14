@@ -19,8 +19,8 @@ Then add it to Corefile:
    httpfetch {
       url https://httpfetch.example.org/
       method POST
-      query dns_name=%s
-      body "{"dns_name":"%s"}"
+      query "dns_name={{ .DnsName }}"
+      body "{{ (dict \"dns_name\" .DnsName) | toJson }}"
       header Authorization: Bearer XXX
       header Content-Type: application/json
       
@@ -31,6 +31,14 @@ Then add it to Corefile:
 ```
 
 Only the `url` config parameter is mandatory.
+
+The following fields support the Go Template syntax and functions provided by the Sprig library are available. See more from its website at http://masterminds.github.io/sprig/
+* query
+* body
+* analyze_ip
+* analyze_ttl
+
+Trouble escaping your configuration? you may also refer to the Caddyfile documentation at https://caddyserver.com/docs/caddyfile This is because CoreDNS uses Caddy as its underlying engine. 
 
 ## Developing locally
 
