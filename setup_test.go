@@ -3,7 +3,6 @@
 package httpfetch
 
 import (
-	"fmt"
 	"github.com/caddyserver/caddy"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -29,14 +28,13 @@ func TestSetupWithUrl(t *testing.T) {
 	httpFetch, _ := newHttpFetch(c)
 	assert.Equal(t, "example.org", httpFetch.ReqUrl, "Url not set properly")
 	assert.Equal(t, "GET", httpFetch.ReqMethod, "Http method did not default to GET")
-	assert.Equal(t, "dns_name=%s", httpFetch.ReqQueryTemplate, "Http method did not default to GET")
+	assert.Equal(t, "dns_name={{ .DnsName }}", httpFetch.ReqQueryTemplate, "Http method did not default to GET")
 }
 
 func TestSetupWithQueryTemplate(t *testing.T) {
-	c := caddy.NewTestController("dns", `httpfetch { url example.org\n query domain=%s\n }`)
+	c := caddy.NewTestController("dns", `httpfetch { url example.org\n query "domain={{ .DnsName }}"\n }`)
 	httpFetch, _ := newHttpFetch(c)
-	assert.Equal(t, "domain=%s", httpFetch.ReqQueryTemplate, "Query template not set properly")
-	assert.Equal(t, "domain=a.com", fmt.Sprintf(httpFetch.ReqQueryTemplate, "a.com"),"Query template not formatted properly")
+	assert.Equal(t, "domain={{ .DnsName }}", httpFetch.ReqQueryTemplate, "Query template not set properly")
 }
 
 

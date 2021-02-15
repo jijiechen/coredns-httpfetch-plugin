@@ -43,7 +43,7 @@ func setup(c *caddy.Controller) error {
 func newHttpFetch(c *caddy.Controller) (HttpFetch, error) {
 	url := ""
 	method := "GET"
-	query := "dns_name=%s"
+	query := "dns_name={{ .DnsName }}"
 	body := ""
 	ipAnalyzer := ""
 	ttlAnalyzer := ""
